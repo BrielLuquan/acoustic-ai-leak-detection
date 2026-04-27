@@ -155,10 +155,6 @@
     );
   }
 }
-  .text-error { color: hsl(var(--error)); }
-  .border-success { border-color: hsl(var(--success)); }
-  .border-error { border-color: hsl(var(--error)); }
-}
 
 /* Pulse animations for live + alert states */
 @keyframes pulse-success {
