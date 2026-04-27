@@ -8,6 +8,7 @@ import { SimulationPanel } from "@/components/dashboard/SimulationPanel";
 import { HistoryPanel } from "@/components/dashboard/HistoryPanel";
 import { SetupNotice } from "@/components/dashboard/SetupNotice";
 import { toast } from "sonner";
+import { playLeakAlert, stopLeakAlert } from "@/lib/alertSound";
 import {
   supabase,
   predictLeak,
