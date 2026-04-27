@@ -16,24 +16,26 @@ export interface SensorReading {
   sensorB: number;
   sensorC: number;
   prediction: Prediction;
+  distance_m: number | null;
   created_at: string;
+}
+
+export interface LeakEvent {
+  id: number;
+  reading_id: number | null;
+  prediction: Prediction;
+  distance_m: number | null;
+  location_label: string;
+  confidence: number;
+  status: "open" | "resolved";
+  detected_at: string;
+  resolved_at: string | null;
 }
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: false },
 });
 
-export function predictLeak(
-  a: number,
-  b: number,
-  c: number
-): Prediction {
-  const max = Math.max(a, b, c);
-  // Treat as "normal" when readings are low or near-equal (within 8% spread)
-  const min = Math.min(a, b, c);
-  const spread = max === 0 ? 0 : (max - min) / max;
-  if (spread < 0.08) return "normal";
-  if (max === a) return "leak_near_A";
-  if (max === b) return "leak_near_B";
-  return "leak_near_C";
-}
+// Re-export for convenience
+export { predictLeak, ruleBasedPredict } from "./predictor";
+export type { PredictionResult, SensorInput, LeakClass } from "./predictor";
