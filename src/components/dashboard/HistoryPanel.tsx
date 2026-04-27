@@ -30,9 +30,10 @@ export function HistoryPanel({ readings }: Props) {
 
       <div className="grid grid-cols-12 gap-2 border-b border-border/60 pb-2 mb-1">
         <span className="data-label col-span-3">TIME</span>
-        <span className="data-label col-span-2 text-right">A</span>
-        <span className="data-label col-span-2 text-right">B</span>
-        <span className="data-label col-span-2 text-right">C</span>
+        <span className="data-label col-span-1 text-right">A</span>
+        <span className="data-label col-span-1 text-right">B</span>
+        <span className="data-label col-span-1 text-right">C</span>
+        <span className="data-label col-span-3 text-right">DISTANCE</span>
         <span className="data-label col-span-3 text-right">PREDICTION</span>
       </div>
 
@@ -58,9 +59,12 @@ export function HistoryPanel({ readings }: Props) {
                 <span className="col-span-3 data-value text-xs text-muted-foreground">
                   {formatTime(r.created_at)}
                 </span>
-                <span className="col-span-2 data-value text-right text-foreground">{r.sensorA.toFixed(1)}</span>
-                <span className="col-span-2 data-value text-right text-foreground">{r.sensorB.toFixed(1)}</span>
-                <span className="col-span-2 data-value text-right text-foreground">{r.sensorC.toFixed(1)}</span>
+                <span className="col-span-1 data-value text-right text-foreground">{r.sensorA.toFixed(1)}</span>
+                <span className="col-span-1 data-value text-right text-foreground">{r.sensorB.toFixed(1)}</span>
+                <span className="col-span-1 data-value text-right text-foreground">{r.sensorC.toFixed(1)}</span>
+                <span className="col-span-3 data-value text-right text-xs text-muted-foreground">
+                  {r.distance_m != null ? `${Number(r.distance_m).toFixed(2)} m` : "—"}
+                </span>
                 <span className="col-span-3 flex justify-end">
                   <span className={`rounded-sm border px-2 py-0.5 text-[10px] font-semibold tracking-[0.12em] ${badge.cls}`}>
                     {badge.label}
