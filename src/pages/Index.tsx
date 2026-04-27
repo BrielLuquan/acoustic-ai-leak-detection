@@ -177,7 +177,15 @@ export default function Index() {
         toast.error("Failed to confirm fix", { description: error.message });
         return;
       }
+      stopLeakAlert();
       setActiveEvent(null);
+      // Reset alert UI to normal: clear last ML result and force latest reading prediction to normal
+      setLastResult(null);
+      setReadings((prev) =>
+        prev.length === 0
+          ? prev
+          : [{ ...prev[0], prediction: "normal", distance_m: null }, ...prev.slice(1)]
+      );
       toast.success("Leak resolved", {
         description: `Incident #${activeEvent.id} marked as fixed.`,
       });
