@@ -138,6 +138,24 @@
   .bg-surface-alt { background-color: hsl(var(--surface-alt)); }
   .text-success { color: hsl(var(--success)); }
   .text-error { color: hsl(var(--error)); }
+  .text-warning { color: hsl(var(--warning)); }
+  .bg-warning { background-color: hsl(var(--warning)); }
+  .border-warning { border-color: hsl(var(--warning)); }
+  .border-success { border-color: hsl(var(--success)); }
+  .border-error { border-color: hsl(var(--error)); }
+
+  /* HUD scanline overlay */
+  .hud-scanlines {
+    background-image: repeating-linear-gradient(
+      0deg,
+      hsl(var(--foreground) / 0.03) 0px,
+      hsl(var(--foreground) / 0.03) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+  }
+}
+  .text-error { color: hsl(var(--error)); }
   .border-success { border-color: hsl(var(--success)); }
   .border-error { border-color: hsl(var(--error)); }
 }
