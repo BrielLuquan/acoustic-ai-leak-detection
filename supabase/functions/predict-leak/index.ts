@@ -15,7 +15,8 @@
 //     location_label: "10.54m from A" }  // optional
 
 // deno-lint-ignore-file no-explicit-any
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+// @ts-nocheck Deno edge runtime
+declare const Deno: any;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
