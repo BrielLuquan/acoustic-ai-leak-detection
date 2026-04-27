@@ -1,19 +1,21 @@
 import { motion, AnimatePresence } from "framer-motion";
-import type { Prediction } from "@/lib/supabaseClient";
+import { Button } from "@/components/ui/button";
+import type { LeakEvent, PredictionResult, Prediction } from "@/lib/supabaseClient";
 
 interface Props {
   prediction: Prediction | null;
+  result: PredictionResult | null;
+  activeEvent: LeakEvent | null;
+  onConfirmFix: () => Promise<void>;
+  resolving: boolean;
 }
 
-const locationMap: Record<Exclude<Prediction, "normal">, string> = {
-  leak_near_A: "Sensor A · Upstream segment",
-  leak_near_B: "Sensor B · Midline segment",
-  leak_near_C: "Sensor C · Downstream segment",
-};
-
-export function LeakAlert({ prediction }: Props) {
+export function LeakAlert({ prediction, result, activeEvent, onConfirmFix, resolving }: Props) {
   const isLeak = prediction && prediction !== "normal";
   const isReady = prediction !== null;
+
+  const locationText = result?.location_label
+    ?? (isLeak ? "Localizing acoustic anomaly…" : "");
 
   return (
     <div
@@ -25,6 +27,12 @@ export function LeakAlert({ prediction }: Props) {
           : ""
       }`}
     >
+      {/* HUD corner brackets */}
+      <span className="pointer-events-none absolute left-2 top-2 h-3 w-3 border-l border-t border-foreground/30" />
+      <span className="pointer-events-none absolute right-2 top-2 h-3 w-3 border-r border-t border-foreground/30" />
+      <span className="pointer-events-none absolute bottom-2 left-2 h-3 w-3 border-b border-l border-foreground/30" />
+      <span className="pointer-events-none absolute bottom-2 right-2 h-3 w-3 border-b border-r border-foreground/30" />
+
       <div className="panel-header">
         <div className="flex items-center gap-2">
           <span
@@ -34,7 +42,9 @@ export function LeakAlert({ prediction }: Props) {
           />
           <span className="panel-title">Leak Detection · ML Inference</span>
         </div>
-        <span className="data-label">MODEL · ACX-1</span>
+        <span className="data-label">
+          {result?.source === "ml_model" ? "MODEL · RFR-1" : "MODEL · ACX-1 (RULE)"}
+        </span>
       </div>
 
       <AnimatePresence mode="wait">
@@ -71,7 +81,7 @@ export function LeakAlert({ prediction }: Props) {
             )}
           </div>
 
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h2 className={`text-balance text-2xl font-semibold tracking-tight sm:text-3xl ${
               isLeak ? "text-error" : isReady ? "text-success" : "text-muted-foreground"
             }`}>
@@ -79,14 +89,54 @@ export function LeakAlert({ prediction }: Props) {
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
               {isLeak
-                ? `Acoustic anomaly localized at ${locationMap[prediction]}`
+                ? `Acoustic anomaly · ${locationText}`
                 : isReady
                 ? "All channels within nominal acoustic range."
                 : "Submit a reading to begin inference."}
             </p>
+
+            {result && isLeak && (
+              <div className="mt-3 grid grid-cols-3 gap-3 text-xs">
+                <Metric label="DISTANCE" value={result.distance_m != null ? `${result.distance_m.toFixed(2)} m` : "—"} />
+                <Metric label="CONFIDENCE" value={`${(result.confidence * 100).toFixed(1)}%`} />
+                <Metric label="SOURCE" value={result.source === "ml_model" ? "ML MODEL" : "HEURISTIC"} />
+              </div>
+            )}
           </div>
         </motion.div>
       </AnimatePresence>
+
+      {activeEvent && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-5 flex items-center justify-between gap-4 rounded-md border border-error/40 bg-error/[0.06] px-4 py-3"
+        >
+          <div className="min-w-0">
+            <p className="data-label text-error">ACTIVE INCIDENT · #{activeEvent.id}</p>
+            <p className="text-xs text-foreground/90 mt-0.5 truncate">
+              {activeEvent.location_label}
+            </p>
+          </div>
+          <Button
+            type="button"
+            onClick={onConfirmFix}
+            disabled={resolving}
+            className="h-9 bg-success text-success-foreground hover:bg-success/90 font-semibold tracking-wide"
+          >
+            {resolving ? "RESOLVING…" : "✓ CONFIRM FIX"}
+          </Button>
+        </motion.div>
+      )}
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-sm border border-border/60 bg-surface-alt px-2.5 py-1.5">
+      <p className="data-label leading-none">{label}</p>
+      <p className="data-value text-sm text-foreground mt-1">{value}</p>
     </div>
   );
 }
