@@ -8,6 +8,7 @@ import { SimulationPanel } from "@/components/dashboard/SimulationPanel";
 import { HistoryPanel } from "@/components/dashboard/HistoryPanel";
 import { SetupNotice } from "@/components/dashboard/SetupNotice";
 import { toast } from "sonner";
+import { playLeakAlert, stopLeakAlert } from "@/lib/alertSound";
 import {
   supabase,
   predictLeak,
@@ -150,6 +151,7 @@ export default function Index() {
               .single();
             if (!evErr && ev) setActiveEvent(ev as LeakEvent);
           }
+          playLeakAlert();
           toast.error("Leak detected", { description: result.location_label });
         } else {
           toast.success("System normal", {
@@ -175,7 +177,15 @@ export default function Index() {
         toast.error("Failed to confirm fix", { description: error.message });
         return;
       }
+      stopLeakAlert();
       setActiveEvent(null);
+      // Reset alert UI to normal: clear last ML result and force latest reading prediction to normal
+      setLastResult(null);
+      setReadings((prev) =>
+        prev.length === 0
+          ? prev
+          : [{ ...prev[0], prediction: "normal", distance_m: null }, ...prev.slice(1)]
+      );
       toast.success("Leak resolved", {
         description: `Incident #${activeEvent.id} marked as fixed.`,
       });
