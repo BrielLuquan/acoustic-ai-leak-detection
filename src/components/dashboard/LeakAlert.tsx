@@ -106,23 +106,25 @@ export function LeakAlert({ prediction, result, activeEvent, onConfirmFix, resol
         </motion.div>
       </AnimatePresence>
 
-      {activeEvent && (
+      {isLeak && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           className="mt-5 flex items-center justify-between gap-4 rounded-md border border-error/40 bg-error/[0.06] px-4 py-3"
         >
           <div className="min-w-0">
-            <p className="data-label text-error">ACTIVE INCIDENT · #{activeEvent.id}</p>
+            <p className="data-label text-error">
+              ACTIVE INCIDENT{activeEvent ? ` · #${activeEvent.id}` : " · LIVE"}
+            </p>
             <p className="text-xs text-foreground/90 mt-0.5 truncate">
-              {activeEvent.location_label}
+              {activeEvent?.location_label ?? locationText}
             </p>
           </div>
           <Button
             type="button"
             onClick={onConfirmFix}
             disabled={resolving}
-            className="h-9 bg-success text-success-foreground hover:bg-success/90 font-semibold tracking-wide"
+            className="h-9 shrink-0 bg-success text-success-foreground hover:bg-success/90 font-semibold tracking-wide"
           >
             {resolving ? "RESOLVING…" : "✓ CONFIRM FIX"}
           </Button>
