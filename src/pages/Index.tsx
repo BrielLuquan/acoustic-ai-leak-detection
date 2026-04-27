@@ -151,6 +151,7 @@ export default function Index() {
               .single();
             if (!evErr && ev) setActiveEvent(ev as LeakEvent);
           }
+          playLeakAlert();
           toast.error("Leak detected", { description: result.location_label });
         } else {
           toast.success("System normal", {
