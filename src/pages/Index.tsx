@@ -13,13 +13,18 @@ import {
   predictLeak,
   type SensorReading,
   type Prediction,
+  type PredictionResult,
+  type LeakEvent,
 } from "@/lib/supabaseClient";
 
 const HISTORY_LIMIT = 10;
 
 export default function Index() {
   const [readings, setReadings] = useState<SensorReading[]>([]);
+  const [activeEvent, setActiveEvent] = useState<LeakEvent | null>(null);
+  const [lastResult, setLastResult] = useState<PredictionResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const [resolving, setResolving] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
 
   const latest = readings[0];
@@ -32,9 +37,8 @@ export default function Index() {
       .order("created_at", { ascending: false })
       .limit(HISTORY_LIMIT);
     if (error) {
-      // 42P01 = relation does not exist
       if (error.code === "42P01" || /sensor_data/i.test(error.message)) {
-        setSetupError("The sensor_data table was not found in your Supabase project.");
+        setSetupError("The sensor_data / leak_events tables were not found in your Supabase project.");
       } else {
         setSetupError(error.message);
       }
@@ -42,19 +46,48 @@ export default function Index() {
     }
     setSetupError(null);
     setReadings((data ?? []) as SensorReading[]);
+
+    // Load most recent open leak (best effort; ignore if table missing)
+    const { data: ev } = await supabase
+      .from("leak_events")
+      .select("*")
+      .eq("status", "open")
+      .order("detected_at", { ascending: false })
+      .limit(1);
+    if (ev && ev.length > 0) setActiveEvent(ev[0] as LeakEvent);
+    else setActiveEvent(null);
   }, []);
 
   useEffect(() => {
     fetchHistory();
 
     const channel = supabase
-      .channel("sensor_data:realtime")
+      .channel("acoustic:realtime")
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "sensor_data" },
         (payload) => {
           const row = payload.new as SensorReading;
-          setReadings((prev) => [row, ...prev].slice(0, HISTORY_LIMIT));
+          setReadings((prev) => {
+            if (prev.find((r) => r.id === row.id)) return prev;
+            return [row, ...prev].slice(0, HISTORY_LIMIT);
+          });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "leak_events" },
+        (payload) => {
+          const row = (payload.new ?? payload.old) as LeakEvent;
+          if (!row) return;
+          if (payload.eventType === "INSERT" && row.status === "open") {
+            setActiveEvent(row);
+          } else if (
+            payload.eventType === "UPDATE" &&
+            (row as LeakEvent).status === "resolved"
+          ) {
+            setActiveEvent((cur) => (cur && cur.id === row.id ? null : cur));
+          }
         }
       )
       .subscribe();
@@ -67,40 +100,89 @@ export default function Index() {
   const handleSubmit = useCallback(
     async (a: number, b: number, c: number) => {
       setBusy(true);
-      const prediction = predictLeak(a, b, c);
       try {
+        const result = await predictLeak({ sensorA: a, sensorB: b, sensorC: c });
+        setLastResult(result);
+
         const { data, error } = await supabase
           .from("sensor_data")
-          .insert({ sensorA: a, sensorB: b, sensorC: c, prediction })
+          .insert({
+            sensorA: a,
+            sensorB: b,
+            sensorC: c,
+            prediction: result.prediction,
+            distance_m: result.distance_m,
+          })
           .select()
           .single();
 
         if (error) {
           if (error.code === "42P01" || /sensor_data/i.test(error.message)) {
-            setSetupError("The sensor_data table was not found in your Supabase project.");
-            toast.error("Setup required", { description: "Create the sensor_data table first." });
+            setSetupError("The sensor_data / leak_events tables were not found in your Supabase project.");
+            toast.error("Setup required", { description: "Run the SQL setup script first." });
           } else {
             toast.error("Failed to save reading", { description: error.message });
           }
           return;
         }
 
-        // Optimistic prepend (realtime will dedupe via id check)
         if (data) {
           setReadings((prev) => {
             if (prev.find((r) => r.id === data.id)) return prev;
             return [data as SensorReading, ...prev].slice(0, HISTORY_LIMIT);
           });
         }
-        toast.success(
-          prediction === "normal" ? "System normal" : `Leak detected: ${prediction.replace("leak_near_", "Sensor ")}`
-        );
+
+        // Open a leak event when a leak is detected and no active one exists
+        if (result.prediction !== "normal") {
+          if (!activeEvent) {
+            const { data: ev, error: evErr } = await supabase
+              .from("leak_events")
+              .insert({
+                reading_id: data?.id ?? null,
+                prediction: result.prediction,
+                distance_m: result.distance_m,
+                location_label: result.location_label,
+                confidence: result.confidence,
+                status: "open",
+              })
+              .select()
+              .single();
+            if (!evErr && ev) setActiveEvent(ev as LeakEvent);
+          }
+          toast.error("Leak detected", { description: result.location_label });
+        } else {
+          toast.success("System normal", {
+            description: `Confidence ${(result.confidence * 100).toFixed(0)}%`,
+          });
+        }
       } finally {
         setBusy(false);
       }
     },
-    []
+    [activeEvent]
   );
+
+  const handleConfirmFix = useCallback(async () => {
+    if (!activeEvent) return;
+    setResolving(true);
+    try {
+      const { error } = await supabase
+        .from("leak_events")
+        .update({ status: "resolved", resolved_at: new Date().toISOString() })
+        .eq("id", activeEvent.id);
+      if (error) {
+        toast.error("Failed to confirm fix", { description: error.message });
+        return;
+      }
+      setActiveEvent(null);
+      toast.success("Leak resolved", {
+        description: `Incident #${activeEvent.id} marked as fixed.`,
+      });
+    } finally {
+      setResolving(false);
+    }
+  }, [activeEvent]);
 
   const headerStatus = useMemo<"live" | "normal" | "leak">(() => {
     if (!latest) return "live";
@@ -126,17 +208,21 @@ export default function Index() {
       >
         <Section><SetupNotice open={!!setupError} message={setupError ?? ""} /></Section>
 
-        {/* Top: alert + pipe diagram */}
         <div className="grid gap-6 lg:grid-cols-5">
           <Section className="lg:col-span-2">
-            <LeakAlert prediction={prediction} />
+            <LeakAlert
+              prediction={prediction}
+              result={lastResult}
+              activeEvent={activeEvent}
+              onConfirmFix={handleConfirmFix}
+              resolving={resolving}
+            />
           </Section>
           <Section className="lg:col-span-3">
-            <PipeDiagram prediction={prediction} />
+            <PipeDiagram prediction={prediction} distanceM={lastResult?.distance_m ?? null} />
           </Section>
         </div>
 
-        {/* Sensor row */}
         <div className="grid gap-6 md:grid-cols-3">
           <Section>
             <SensorCard
@@ -164,7 +250,6 @@ export default function Index() {
           </Section>
         </div>
 
-        {/* Bottom: simulation + history */}
         <div className="grid gap-6 lg:grid-cols-5">
           <Section className="lg:col-span-2">
             <SimulationPanel onSubmit={handleSubmit} busy={busy} />
@@ -175,8 +260,11 @@ export default function Index() {
         </div>
 
         <footer className="pt-4 pb-8 flex items-center justify-between text-[11px] text-muted-foreground tracking-[0.14em] uppercase font-mono">
-          <span>© Acoustic AI · v1.0.0</span>
-          <span>Model ACX-1 · Inference latency &lt; 50ms</span>
+          <span>© Acoustic AI · v1.1.0</span>
+          <span>
+            {lastResult?.source === "ml_model" ? "Model RFR-1 · Python ML" : "Model ACX-1 · Heuristic fallback"}
+            {" · Inference < 50ms"}
+          </span>
         </footer>
       </motion.main>
     </div>
