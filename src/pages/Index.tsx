@@ -166,29 +166,31 @@ export default function Index() {
   );
 
   const handleConfirmFix = useCallback(async () => {
-    if (!activeEvent) return;
     setResolving(true);
     try {
-      const { error } = await supabase
-        .from("leak_events")
-        .update({ status: "resolved", resolved_at: new Date().toISOString() })
-        .eq("id", activeEvent.id);
-      if (error) {
-        toast.error("Failed to confirm fix", { description: error.message });
-        return;
+      if (activeEvent) {
+        const { error } = await supabase
+          .from("leak_events")
+          .update({ status: "resolved", resolved_at: new Date().toISOString() })
+          .eq("id", activeEvent.id);
+        if (error) {
+          toast.error("Failed to confirm fix", { description: error.message });
+          return;
+        }
+        toast.success("Leak resolved", {
+          description: `Incident #${activeEvent.id} marked as fixed.`,
+        });
+      } else {
+        toast.success("Leak resolved", { description: "System returned to nominal." });
       }
       stopLeakAlert();
       setActiveEvent(null);
-      // Reset alert UI to normal: clear last ML result and force latest reading prediction to normal
       setLastResult(null);
       setReadings((prev) =>
         prev.length === 0
           ? prev
           : [{ ...prev[0], prediction: "normal", distance_m: null }, ...prev.slice(1)]
       );
-      toast.success("Leak resolved", {
-        description: `Incident #${activeEvent.id} marked as fixed.`,
-      });
     } finally {
       setResolving(false);
     }
