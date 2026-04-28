@@ -7,8 +7,10 @@ import { PipeDiagram } from "@/components/dashboard/PipeDiagram";
 import { SimulationPanel } from "@/components/dashboard/SimulationPanel";
 import { HistoryPanel } from "@/components/dashboard/HistoryPanel";
 import { SetupNotice } from "@/components/dashboard/SetupNotice";
+import { GeometryPanel } from "@/components/dashboard/GeometryPanel";
 import { toast } from "sonner";
 import { playLeakAlert, stopLeakAlert } from "@/lib/alertSound";
+import { usePipeGeometry } from "@/lib/pipeConfig";
 import {
   supabase,
   predictLeak,
