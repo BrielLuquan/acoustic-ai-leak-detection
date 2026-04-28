@@ -32,6 +32,11 @@ export default function Index() {
   const [resolving, setResolving] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [geometry] = usePipeGeometry();
+  const [showSimulation, setShowSimulation] = useState(true);
+  const [hardwareLive, setHardwareLive] = useState(false);
+  const [autoHide, setAutoHide] = useState(true);
+  const manualIdsRef = useRef<Set<number>>(new Set());
+  const hardwareTimerRef = useRef<number | null>(null);
 
   const latest = readings[0];
   const prediction: Prediction | null = latest?.prediction ?? null;
