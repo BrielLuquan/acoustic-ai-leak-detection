@@ -1,5 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import type { SensorReading } from "@/lib/supabaseClient";
+import { usePipeGeometry, sensorPositions, pipeLength } from "@/lib/pipeConfig";
+import type { PipeGeometry } from "@/lib/pipeConfig";
 
 interface Props {
   readings: SensorReading[];
@@ -17,7 +19,19 @@ function formatTime(iso: string) {
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
 }
 
+/** Weighted centroid distance fallback when the DB row has no distance_m. */
+function estimateDistance(r: SensorReading, g: PipeGeometry): number {
+  const pos = sensorPositions(g);
+  const w = [r.sensorA, r.sensorB, r.sensorC];
+  const p = [pos.A, pos.B, pos.C];
+  const total = w.reduce((s, v) => s + v, 0) || 1;
+  const d = w.reduce((s, v, i) => s + (v / total) * p[i], 0);
+  return Math.max(0, Math.min(pipeLength(g), d));
+}
+
 export function HistoryPanel({ readings }: Props) {
+  const [geometry] = usePipeGeometry();
+
   return (
     <div className="panel">
       <div className="panel-header">
@@ -63,7 +77,10 @@ export function HistoryPanel({ readings }: Props) {
                 <span className="col-span-1 data-value text-right text-foreground">{r.sensorB.toFixed(1)}</span>
                 <span className="col-span-1 data-value text-right text-foreground">{r.sensorC.toFixed(1)}</span>
                 <span className="col-span-3 data-value text-right text-xs text-muted-foreground">
-                  {r.distance_m != null ? `${Number(r.distance_m).toFixed(2)} m` : "—"}
+                  {(() => {
+                    const d = r.distance_m != null ? Number(r.distance_m) : estimateDistance(r, geometry);
+                    return `${d.toFixed(2)} m`;
+                  })()}
                 </span>
                 <span className="col-span-3 flex justify-end">
                   <span className={`rounded-sm border px-2 py-0.5 text-[10px] font-semibold tracking-[0.12em] ${badge.cls}`}>
