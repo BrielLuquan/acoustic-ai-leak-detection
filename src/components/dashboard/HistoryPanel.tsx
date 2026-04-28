@@ -1,5 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import type { SensorReading } from "@/lib/supabaseClient";
+import { usePipeGeometry, sensorPositions, pipeLength } from "@/lib/pipeConfig";
+import type { PipeGeometry } from "@/lib/pipeConfig";
 
 interface Props {
   readings: SensorReading[];
@@ -15,6 +17,16 @@ const predBadge: Record<string, { label: string; cls: string }> = {
 function formatTime(iso: string) {
   const d = new Date(iso);
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+}
+
+/** Weighted centroid distance fallback when the DB row has no distance_m. */
+function estimateDistance(r: SensorReading, g: PipeGeometry): number {
+  const pos = sensorPositions(g);
+  const w = [r.sensorA, r.sensorB, r.sensorC];
+  const p = [pos.A, pos.B, pos.C];
+  const total = w.reduce((s, v) => s + v, 0) || 1;
+  const d = w.reduce((s, v, i) => s + (v / total) * p[i], 0);
+  return Math.max(0, Math.min(pipeLength(g), d));
 }
 
 export function HistoryPanel({ readings }: Props) {
