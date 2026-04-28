@@ -83,6 +83,16 @@ export default function Index() {
             if (prev.find((r) => r.id === row.id)) return prev;
             return [row, ...prev].slice(0, HISTORY_LIMIT);
           });
+
+          // Auto-detect real hardware: any insert NOT originated from this client
+          // is treated as a packet from a physical sensor / external ingest.
+          if (!manualIdsRef.current.has(row.id)) {
+            setHardwareLive(true);
+            if (hardwareTimerRef.current) window.clearTimeout(hardwareTimerRef.current);
+            hardwareTimerRef.current = window.setTimeout(() => {
+              setHardwareLive(false);
+            }, HARDWARE_TIMEOUT_MS);
+          }
         }
       )
       .on(
@@ -105,8 +115,14 @@ export default function Index() {
 
     return () => {
       supabase.removeChannel(channel);
+      if (hardwareTimerRef.current) window.clearTimeout(hardwareTimerRef.current);
     };
   }, [fetchHistory]);
+
+  // Auto-hide simulation panel when real hardware is detected
+  useEffect(() => {
+    if (autoHide && hardwareLive) setShowSimulation(false);
+  }, [autoHide, hardwareLive]);
 
   const handleSubmit = useCallback(
     async (a: number, b: number, c: number) => {
