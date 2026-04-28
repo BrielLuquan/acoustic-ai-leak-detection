@@ -29,6 +29,7 @@ export default function Index() {
   const [busy, setBusy] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
+  const [geometry] = usePipeGeometry();
 
   const latest = readings[0];
   const prediction: Prediction | null = latest?.prediction ?? null;
