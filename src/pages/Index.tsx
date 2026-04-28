@@ -21,7 +21,7 @@ import {
   type LeakEvent,
 } from "@/lib/supabaseClient";
 
-const HISTORY_LIMIT = 10;
+const HISTORY_LIMIT = 4;
 const HARDWARE_TIMEOUT_MS = 60_000; // if no real-sensor packet in 60s, hardware considered offline
 
 export default function Index() {
