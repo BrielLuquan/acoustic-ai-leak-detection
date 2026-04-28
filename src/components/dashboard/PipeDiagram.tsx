@@ -51,8 +51,8 @@ export function PipeDiagram({ prediction, distanceM, geometry }: Props) {
         <span className="data-label tabular-nums">SPAN {span.toFixed(2)}m · 3 NODES</span>
       </div>
 
-      <div className="relative w-full">
-        <svg viewBox="0 0 600 180" className="w-full h-auto" preserveAspectRatio="xMidYMid meet">
+      <div className="relative w-full mx-auto max-w-[640px]">
+        <svg viewBox="0 0 600 180" className="w-full h-auto max-h-[220px]" preserveAspectRatio="xMidYMid meet">
           <defs>
             <linearGradient id="pipeFill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="hsl(var(--surface-alt))" />
