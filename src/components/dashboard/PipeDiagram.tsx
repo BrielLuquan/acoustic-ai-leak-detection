@@ -1,31 +1,43 @@
 import { motion } from "framer-motion";
 import type { Prediction } from "@/lib/supabaseClient";
+import { pipeLength, sensorPositions, type PipeGeometry } from "@/lib/pipeConfig";
 
 interface Props {
   prediction: Prediction | null;
   distanceM: number | null;
+  geometry: PipeGeometry;
 }
 
-const PIPE_LENGTH_M = 600;
-const sensors: { id: "A" | "B" | "C"; cx: number; pred: Prediction; meters: number }[] = [
-  { id: "A", cx: 80,  pred: "leak_near_A", meters: 0 },
-  { id: "B", cx: 300, pred: "leak_near_B", meters: 300 },
-  { id: "C", cx: 520, pred: "leak_near_C", meters: 600 },
-];
+const X_LEFT = 80;
+const X_RIGHT = 520;
 
-function metersToX(m: number) {
-  // pipe spans visually from x=80 (sensor A, 0m) to x=520 (sensor C, 600m)
-  const ratio = Math.max(0, Math.min(1, m / PIPE_LENGTH_M));
-  return 80 + ratio * (520 - 80);
-}
+export function PipeDiagram({ prediction, distanceM, geometry }: Props) {
+  const span = pipeLength(geometry);
+  const pos = sensorPositions(geometry);
 
-export function PipeDiagram({ prediction, distanceM }: Props) {
+  function metersToX(m: number) {
+    const ratio = span === 0 ? 0 : Math.max(0, Math.min(1, m / span));
+    return X_LEFT + ratio * (X_RIGHT - X_LEFT);
+  }
+
+  const sensors: { id: "A" | "B" | "C"; cx: number; pred: Prediction; meters: number }[] = [
+    { id: "A", cx: metersToX(pos.A), pred: "leak_near_A", meters: pos.A },
+    { id: "B", cx: metersToX(pos.B), pred: "leak_near_B", meters: pos.B },
+    { id: "C", cx: metersToX(pos.C), pred: "leak_near_C", meters: pos.C },
+  ];
+
   const isLeak = prediction && prediction !== "normal";
   const leakX = isLeak && distanceM != null ? metersToX(distanceM) : null;
 
+  // Tick count proportional to span, capped to keep diagram readable
+  const tickCount = Math.min(13, Math.max(5, Math.round(span) + 1));
+  const ticks = Array.from({ length: tickCount }).map((_, i) => {
+    const m = (i * span) / (tickCount - 1);
+    return { x: metersToX(m), m };
+  });
+
   return (
     <div className="panel relative">
-      {/* HUD corner brackets */}
       <span className="pointer-events-none absolute left-2 top-2 h-3 w-3 border-l border-t border-foreground/30" />
       <span className="pointer-events-none absolute right-2 top-2 h-3 w-3 border-r border-t border-foreground/30" />
       <span className="pointer-events-none absolute bottom-2 left-2 h-3 w-3 border-b border-l border-foreground/30" />
@@ -36,7 +48,7 @@ export function PipeDiagram({ prediction, distanceM }: Props) {
           <span className="status-dot bg-primary animate-signal" />
           <span className="panel-title">Pipeline Topology · Mission Sector-07</span>
         </div>
-        <span className="data-label">SPAN 600m · 3 NODES</span>
+        <span className="data-label tabular-nums">SPAN {span.toFixed(2)}m · 3 NODES</span>
       </div>
 
       <div className="relative w-full">
@@ -54,26 +66,21 @@ export function PipeDiagram({ prediction, distanceM }: Props) {
             </linearGradient>
           </defs>
 
-          {/* Distance ticks */}
-          {Array.from({ length: 13 }).map((_, i) => {
-            const x = 80 + (i * (520 - 80)) / 12;
-            return (
-              <line
-                key={i}
-                x1={x} x2={x}
-                y1={104} y2={i % 3 === 0 ? 112 : 108}
-                stroke="hsl(var(--muted-foreground) / 0.4)"
-                strokeWidth={1}
-              />
-            );
-          })}
+          {ticks.map((t, i) => (
+            <line
+              key={i}
+              x1={t.x} x2={t.x}
+              y1={104} y2={i % 3 === 0 ? 112 : 108}
+              stroke="hsl(var(--muted-foreground) / 0.4)"
+              strokeWidth={1}
+            />
+          ))}
 
-          {/* Pipe segments between sensors */}
           {[
-            { x1: 0,   x2: 80,  active: prediction === "leak_near_A" },
-            { x1: 80,  x2: 300, active: prediction === "leak_near_A" || prediction === "leak_near_B" },
-            { x1: 300, x2: 520, active: prediction === "leak_near_B" || prediction === "leak_near_C" },
-            { x1: 520, x2: 600, active: prediction === "leak_near_C" },
+            { x1: 0,                  x2: sensors[0].cx, active: prediction === "leak_near_A" },
+            { x1: sensors[0].cx,      x2: sensors[1].cx, active: prediction === "leak_near_A" || prediction === "leak_near_B" },
+            { x1: sensors[1].cx,      x2: sensors[2].cx, active: prediction === "leak_near_B" || prediction === "leak_near_C" },
+            { x1: sensors[2].cx,      x2: 600,           active: prediction === "leak_near_C" },
           ].map((seg, i) => (
             <g key={i}>
               <rect
@@ -100,11 +107,9 @@ export function PipeDiagram({ prediction, distanceM }: Props) {
             </g>
           ))}
 
-          {/* End caps */}
           <rect x={0}   y={66} width={6} height={28} fill="hsl(var(--border))" />
           <rect x={594} y={66} width={6} height={28} fill="hsl(var(--border))" />
 
-          {/* Precise leak marker (from ML distance) */}
           {leakX != null && (
             <g>
               <motion.line
@@ -137,7 +142,6 @@ export function PipeDiagram({ prediction, distanceM }: Props) {
             </g>
           )}
 
-          {/* Sensors */}
           {sensors.map((s) => {
             const isHot = prediction === s.pred;
             return (
@@ -183,7 +187,7 @@ export function PipeDiagram({ prediction, distanceM }: Props) {
                   fill="hsl(var(--muted-foreground) / 0.7)"
                   letterSpacing={1}
                 >
-                  {s.meters}m
+                  {s.meters.toFixed(2)}m
                 </text>
               </g>
             );

@@ -7,8 +7,10 @@ import { PipeDiagram } from "@/components/dashboard/PipeDiagram";
 import { SimulationPanel } from "@/components/dashboard/SimulationPanel";
 import { HistoryPanel } from "@/components/dashboard/HistoryPanel";
 import { SetupNotice } from "@/components/dashboard/SetupNotice";
+import { GeometryPanel } from "@/components/dashboard/GeometryPanel";
 import { toast } from "sonner";
 import { playLeakAlert, stopLeakAlert } from "@/lib/alertSound";
+import { usePipeGeometry } from "@/lib/pipeConfig";
 import {
   supabase,
   predictLeak,
@@ -27,6 +29,7 @@ export default function Index() {
   const [busy, setBusy] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
+  const [geometry] = usePipeGeometry();
 
   const latest = readings[0];
   const prediction: Prediction | null = latest?.prediction ?? null;
@@ -102,7 +105,7 @@ export default function Index() {
     async (a: number, b: number, c: number) => {
       setBusy(true);
       try {
-        const result = await predictLeak({ sensorA: a, sensorB: b, sensorC: c });
+        const result = await predictLeak({ sensorA: a, sensorB: b, sensorC: c }, geometry);
         setLastResult(result);
 
         const { data, error } = await supabase
@@ -162,7 +165,7 @@ export default function Index() {
         setBusy(false);
       }
     },
-    [activeEvent]
+    [activeEvent, geometry]
   );
 
   const handleConfirmFix = useCallback(async () => {
@@ -231,7 +234,7 @@ export default function Index() {
             />
           </Section>
           <Section className="lg:col-span-3">
-            <PipeDiagram prediction={prediction} distanceM={lastResult?.distance_m ?? null} />
+            <PipeDiagram prediction={prediction} distanceM={lastResult?.distance_m ?? null} geometry={geometry} />
           </Section>
         </div>
 
@@ -262,11 +265,14 @@ export default function Index() {
           </Section>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-5">
+        <div className="grid gap-6 lg:grid-cols-6">
+          <Section className="lg:col-span-2">
+            <GeometryPanel />
+          </Section>
           <Section className="lg:col-span-2">
             <SimulationPanel onSubmit={handleSubmit} busy={busy} />
           </Section>
-          <Section className="lg:col-span-3">
+          <Section className="lg:col-span-2">
             <HistoryPanel readings={readings} />
           </Section>
         </div>

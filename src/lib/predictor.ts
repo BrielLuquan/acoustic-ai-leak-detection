@@ -14,6 +14,7 @@
  */
 
 import { supabase } from "./supabaseClient";
+import { loadGeometry, pipeLength, sensorPositions, type PipeGeometry } from "./pipeConfig";
 
 export type LeakClass =
   | "normal"
@@ -41,10 +42,10 @@ export interface PredictionResult {
 
 /* ---------- Rule-based fallback (mirrors the ML contract) ---------- */
 
-const PIPE_LENGTH_M = 600;
-const SENSOR_POS_M: Record<"A" | "B" | "C", number> = { A: 0, B: 300, C: 600 };
-
-export function ruleBasedPredict(input: SensorInput): PredictionResult {
+export function ruleBasedPredict(
+  input: SensorInput,
+  geometry: PipeGeometry = loadGeometry(),
+): PredictionResult {
   const { sensorA: a, sensorB: b, sensorC: c } = input;
   const max = Math.max(a, b, c);
   const min = Math.min(a, b, c);
@@ -60,12 +61,15 @@ export function ruleBasedPredict(input: SensorInput): PredictionResult {
     };
   }
 
+  const pos = sensorPositions(geometry);
+  const span = pipeLength(geometry);
+
   // Localize: weighted centroid biased toward the loudest sensor.
   const weights = [a, b, c];
-  const positions = [SENSOR_POS_M.A, SENSOR_POS_M.B, SENSOR_POS_M.C];
+  const positions = [pos.A, pos.B, pos.C];
   const total = weights.reduce((s, w) => s + w, 0) || 1;
   const distance = weights.reduce((s, w, i) => s + (w / total) * positions[i], 0);
-  const clamped = Math.max(0, Math.min(PIPE_LENGTH_M, distance));
+  const clamped = Math.max(0, Math.min(span, distance));
 
   let cls: LeakClass = "leak_near_B";
   if (max === a) cls = "leak_near_A";
@@ -91,11 +95,21 @@ let mlAvailable: boolean | null = null;
  * Calls the deployed `predict-leak` Supabase Edge Function.
  * Returns null if the function is unavailable, so callers can fall back.
  */
-async function callMLModel(input: SensorInput): Promise<PredictionResult | null> {
+async function callMLModel(
+  input: SensorInput,
+  geometry: PipeGeometry,
+): Promise<PredictionResult | null> {
   if (mlAvailable === false) return null;
   try {
     const { data, error } = await supabase.functions.invoke("predict-leak", {
-      body: input,
+      body: {
+        ...input,
+        geometry: {
+          ab: geometry.ab,
+          bc: geometry.bc,
+          pipe_length_m: pipeLength(geometry),
+        },
+      },
     });
     if (error) {
       mlAvailable = false;
@@ -122,8 +136,11 @@ async function callMLModel(input: SensorInput): Promise<PredictionResult | null>
 /**
  * Public entry point. Tries ML first, falls back to heuristic.
  */
-export async function predictLeak(input: SensorInput): Promise<PredictionResult> {
-  const ml = await callMLModel(input);
+export async function predictLeak(
+  input: SensorInput,
+  geometry: PipeGeometry = loadGeometry(),
+): Promise<PredictionResult> {
+  const ml = await callMLModel(input, geometry);
   if (ml) return ml;
-  return ruleBasedPredict(input);
+  return ruleBasedPredict(input, geometry);
 }
