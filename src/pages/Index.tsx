@@ -234,7 +234,7 @@ export default function Index() {
             />
           </Section>
           <Section className="lg:col-span-3">
-            <PipeDiagram prediction={prediction} distanceM={lastResult?.distance_m ?? null} />
+            <PipeDiagram prediction={prediction} distanceM={lastResult?.distance_m ?? null} geometry={geometry} />
           </Section>
         </div>
 
@@ -265,11 +265,14 @@ export default function Index() {
           </Section>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-5">
+        <div className="grid gap-6 lg:grid-cols-6">
+          <Section className="lg:col-span-2">
+            <GeometryPanel />
+          </Section>
           <Section className="lg:col-span-2">
             <SimulationPanel onSubmit={handleSubmit} busy={busy} />
           </Section>
-          <Section className="lg:col-span-3">
+          <Section className="lg:col-span-2">
             <HistoryPanel readings={readings} />
           </Section>
         </div>
