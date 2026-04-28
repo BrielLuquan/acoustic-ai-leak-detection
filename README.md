@@ -1,3 +1,2 @@
-# Welcome to your Lovable project
+#Welcome to Briel's Project
 
-TODO: Document your project here
