@@ -248,7 +248,7 @@ export default function Index() {
         <Section><SetupNotice open={!!setupError} message={setupError ?? ""} /></Section>
 
         <div className="grid gap-6 lg:grid-cols-5">
-          <Section className="lg:col-span-2">
+          <Section className="lg:col-span-3">
             <LeakAlert
               prediction={prediction}
               result={lastResult}
@@ -257,7 +257,7 @@ export default function Index() {
               resolving={resolving}
             />
           </Section>
-          <Section className="lg:col-span-3">
+          <Section className="lg:col-span-2">
             <PipeDiagram prediction={prediction} distanceM={lastResult?.distance_m ?? null} geometry={geometry} />
           </Section>
         </div>
