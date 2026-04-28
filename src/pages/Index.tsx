@@ -289,13 +289,49 @@ export default function Index() {
           </Section>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-6">
+        <Section>
+          <div className="panel flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span
+                className={`status-dot ${hardwareLive ? "bg-success animate-pulse-success" : "bg-muted-foreground"}`}
+              />
+              <div>
+                <p className="data-label">Hardware Ingest</p>
+                <p className="text-sm text-foreground font-mono tracking-wide">
+                  {hardwareLive ? "REAL SENSORS · LIVE" : "NO HARDWARE DETECTED"}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-6">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <Switch checked={autoHide} onCheckedChange={setAutoHide} />
+                <span className="data-label">Auto-hide on hardware</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <Switch
+                  checked={showSimulation}
+                  onCheckedChange={(v) => {
+                    setShowSimulation(v);
+                    if (v) setAutoHide(false);
+                  }}
+                />
+                <span className="data-label">Show simulation panel</span>
+              </label>
+            </div>
+          </div>
+        </Section>
+
+        <div className={`grid gap-6 ${showSimulation ? "lg:grid-cols-6" : "lg:grid-cols-4"}`}>
           <Section className="lg:col-span-2">
             <GeometryPanel />
           </Section>
-          <Section className="lg:col-span-2">
-            <SimulationPanel onSubmit={handleSubmit} busy={busy} />
-          </Section>
+          <AnimatePresence mode="popLayout">
+            {showSimulation && (
+              <Section className="lg:col-span-2">
+                <SimulationPanel onSubmit={handleSubmit} busy={busy} />
+              </Section>
+            )}
+          </AnimatePresence>
           <Section className="lg:col-span-2">
             <HistoryPanel readings={readings} />
           </Section>
