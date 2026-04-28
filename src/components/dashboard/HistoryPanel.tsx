@@ -77,7 +77,10 @@ export function HistoryPanel({ readings }: Props) {
                 <span className="col-span-1 data-value text-right text-foreground">{r.sensorB.toFixed(1)}</span>
                 <span className="col-span-1 data-value text-right text-foreground">{r.sensorC.toFixed(1)}</span>
                 <span className="col-span-3 data-value text-right text-xs text-muted-foreground">
-                  {r.distance_m != null ? `${Number(r.distance_m).toFixed(2)} m` : "—"}
+                  {(() => {
+                    const d = r.distance_m != null ? Number(r.distance_m) : estimateDistance(r, geometry);
+                    return `${d.toFixed(2)} m`;
+                  })()}
                 </span>
                 <span className="col-span-3 flex justify-end">
                   <span className={`rounded-sm border px-2 py-0.5 text-[10px] font-semibold tracking-[0.12em] ${badge.cls}`}>
