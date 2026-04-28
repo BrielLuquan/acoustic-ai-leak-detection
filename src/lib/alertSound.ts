@@ -19,7 +19,7 @@ function getCtx(): AudioContext | null {
   return ctx;
 }
 
-export function playLeakAlert(durationMs = 1600) {
+export function playLeakAlert(durationMs = 30000) {
   const ac = getCtx();
   if (!ac) return;
   if (ac.state === "suspended") ac.resume().catch(() => {});
@@ -34,17 +34,17 @@ export function playLeakAlert(durationMs = 1600) {
   const now = ac.currentTime;
   const end = now + durationMs / 1000;
 
-  // Soft envelope
+  // Soft envelope — quick attack, sustain through full duration, gentle release
   master.gain.exponentialRampToValueAtTime(0.18, now + 0.04);
-  master.gain.setValueAtTime(0.18, end - 0.15);
+  master.gain.setValueAtTime(0.18, end - 0.25);
   master.gain.exponentialRampToValueAtTime(0.0001, end);
 
-  // Two-tone alternating square oscillators (siren)
+  // Two-tone alternating square oscillator (siren)
   const osc = ac.createOscillator();
   osc.type = "square";
   osc.frequency.setValueAtTime(880, now);
 
-  // Alternate frequencies every 180ms
+  // Alternate frequencies every 180ms for the full duration
   let t = now;
   let high = false;
   while (t < end) {

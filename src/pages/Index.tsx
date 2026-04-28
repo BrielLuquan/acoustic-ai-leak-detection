@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Header } from "@/components/dashboard/Header";
 import { SensorCard } from "@/components/dashboard/SensorCard";
 import { LeakAlert } from "@/components/dashboard/LeakAlert";
@@ -8,6 +8,7 @@ import { SimulationPanel } from "@/components/dashboard/SimulationPanel";
 import { HistoryPanel } from "@/components/dashboard/HistoryPanel";
 import { SetupNotice } from "@/components/dashboard/SetupNotice";
 import { GeometryPanel } from "@/components/dashboard/GeometryPanel";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { playLeakAlert, stopLeakAlert } from "@/lib/alertSound";
 import { usePipeGeometry } from "@/lib/pipeConfig";
@@ -21,6 +22,7 @@ import {
 } from "@/lib/supabaseClient";
 
 const HISTORY_LIMIT = 10;
+const HARDWARE_TIMEOUT_MS = 60_000; // if no real-sensor packet in 60s, hardware considered offline
 
 export default function Index() {
   const [readings, setReadings] = useState<SensorReading[]>([]);
@@ -30,6 +32,11 @@ export default function Index() {
   const [resolving, setResolving] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [geometry] = usePipeGeometry();
+  const [showSimulation, setShowSimulation] = useState(true);
+  const [hardwareLive, setHardwareLive] = useState(false);
+  const [autoHide, setAutoHide] = useState(true);
+  const manualIdsRef = useRef<Set<number>>(new Set());
+  const hardwareTimerRef = useRef<number | null>(null);
 
   const latest = readings[0];
   const prediction: Prediction | null = latest?.prediction ?? null;
@@ -76,6 +83,16 @@ export default function Index() {
             if (prev.find((r) => r.id === row.id)) return prev;
             return [row, ...prev].slice(0, HISTORY_LIMIT);
           });
+
+          // Auto-detect real hardware: any insert NOT originated from this client
+          // is treated as a packet from a physical sensor / external ingest.
+          if (!manualIdsRef.current.has(row.id)) {
+            setHardwareLive(true);
+            if (hardwareTimerRef.current) window.clearTimeout(hardwareTimerRef.current);
+            hardwareTimerRef.current = window.setTimeout(() => {
+              setHardwareLive(false);
+            }, HARDWARE_TIMEOUT_MS);
+          }
         }
       )
       .on(
@@ -98,8 +115,14 @@ export default function Index() {
 
     return () => {
       supabase.removeChannel(channel);
+      if (hardwareTimerRef.current) window.clearTimeout(hardwareTimerRef.current);
     };
   }, [fetchHistory]);
+
+  // Auto-hide simulation panel when real hardware is detected
+  useEffect(() => {
+    if (autoHide && hardwareLive) setShowSimulation(false);
+  }, [autoHide, hardwareLive]);
 
   const handleSubmit = useCallback(
     async (a: number, b: number, c: number) => {
@@ -131,6 +154,7 @@ export default function Index() {
         }
 
         if (data) {
+          manualIdsRef.current.add(data.id);
           setReadings((prev) => {
             if (prev.find((r) => r.id === data.id)) return prev;
             return [data as SensorReading, ...prev].slice(0, HISTORY_LIMIT);
@@ -265,13 +289,49 @@ export default function Index() {
           </Section>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-6">
+        <Section>
+          <div className="panel flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span
+                className={`status-dot ${hardwareLive ? "bg-success animate-pulse-success" : "bg-muted-foreground"}`}
+              />
+              <div>
+                <p className="data-label">Hardware Ingest</p>
+                <p className="text-sm text-foreground font-mono tracking-wide">
+                  {hardwareLive ? "REAL SENSORS · LIVE" : "NO HARDWARE DETECTED"}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-6">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <Switch checked={autoHide} onCheckedChange={setAutoHide} />
+                <span className="data-label">Auto-hide on hardware</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <Switch
+                  checked={showSimulation}
+                  onCheckedChange={(v) => {
+                    setShowSimulation(v);
+                    if (v) setAutoHide(false);
+                  }}
+                />
+                <span className="data-label">Show simulation panel</span>
+              </label>
+            </div>
+          </div>
+        </Section>
+
+        <div className={`grid gap-6 ${showSimulation ? "lg:grid-cols-6" : "lg:grid-cols-4"}`}>
           <Section className="lg:col-span-2">
             <GeometryPanel />
           </Section>
-          <Section className="lg:col-span-2">
-            <SimulationPanel onSubmit={handleSubmit} busy={busy} />
-          </Section>
+          <AnimatePresence mode="popLayout">
+            {showSimulation && (
+              <Section className="lg:col-span-2">
+                <SimulationPanel onSubmit={handleSubmit} busy={busy} />
+              </Section>
+            )}
+          </AnimatePresence>
           <Section className="lg:col-span-2">
             <HistoryPanel readings={readings} />
           </Section>
