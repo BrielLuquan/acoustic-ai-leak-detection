@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Header } from "@/components/dashboard/Header";
 import { SensorCard } from "@/components/dashboard/SensorCard";
 import { LeakAlert } from "@/components/dashboard/LeakAlert";
@@ -8,6 +8,7 @@ import { SimulationPanel } from "@/components/dashboard/SimulationPanel";
 import { HistoryPanel } from "@/components/dashboard/HistoryPanel";
 import { SetupNotice } from "@/components/dashboard/SetupNotice";
 import { GeometryPanel } from "@/components/dashboard/GeometryPanel";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { playLeakAlert, stopLeakAlert } from "@/lib/alertSound";
 import { usePipeGeometry } from "@/lib/pipeConfig";
@@ -21,6 +22,7 @@ import {
 } from "@/lib/supabaseClient";
 
 const HISTORY_LIMIT = 10;
+const HARDWARE_TIMEOUT_MS = 60_000; // if no real-sensor packet in 60s, hardware considered offline
 
 export default function Index() {
   const [readings, setReadings] = useState<SensorReading[]>([]);
