@@ -30,6 +30,8 @@ function estimateDistance(r: SensorReading, g: PipeGeometry): number {
 }
 
 export function HistoryPanel({ readings }: Props) {
+  const [geometry] = usePipeGeometry();
+
   return (
     <div className="panel">
       <div className="panel-header">
