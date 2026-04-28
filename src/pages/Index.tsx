@@ -154,6 +154,7 @@ export default function Index() {
         }
 
         if (data) {
+          manualIdsRef.current.add(data.id);
           setReadings((prev) => {
             if (prev.find((r) => r.id === data.id)) return prev;
             return [data as SensorReading, ...prev].slice(0, HISTORY_LIMIT);
