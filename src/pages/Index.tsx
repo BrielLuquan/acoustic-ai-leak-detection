@@ -105,7 +105,7 @@ export default function Index() {
     async (a: number, b: number, c: number) => {
       setBusy(true);
       try {
-        const result = await predictLeak({ sensorA: a, sensorB: b, sensorC: c });
+        const result = await predictLeak({ sensorA: a, sensorB: b, sensorC: c }, geometry);
         setLastResult(result);
 
         const { data, error } = await supabase
@@ -165,7 +165,7 @@ export default function Index() {
         setBusy(false);
       }
     },
-    [activeEvent]
+    [activeEvent, geometry]
   );
 
   const handleConfirmFix = useCallback(async () => {
