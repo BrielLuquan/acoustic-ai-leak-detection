@@ -1,28 +1,24 @@
 import numpy as np
 import pandas as pd
+import os
 
 np.random.seed(42)
 
-N = 5000  # dataset size
+N = 5000
 
-# Simulated leak position (0m to 600m pipeline)
 leak_position = np.random.uniform(0, 600, N)
 
-# 3 sensors placed along pipeline
-sensor_A = np.zeros(N)
-sensor_B = np.zeros(N)
-sensor_C = np.zeros(N)
+sensor_A = []
+sensor_B = []
+sensor_C = []
 
-# distance-based signal attenuation model
 def signal_strength(distance):
     return np.exp(-distance / 120) + np.random.normal(0, 0.02)
 
-for i in range(N):
-    pos = leak_position[i]
-
-    sensor_A[i] = signal_strength(abs(pos - 0))
-    sensor_B[i] = signal_strength(abs(pos - 300))
-    sensor_C[i] = signal_strength(abs(pos - 600))
+for pos in leak_position:
+    sensor_A.append(signal_strength(abs(pos - 0)))
+    sensor_B.append(signal_strength(abs(pos - 300)))
+    sensor_C.append(signal_strength(abs(pos - 600)))
 
 df = pd.DataFrame({
     "A": sensor_A,
@@ -31,6 +27,9 @@ df = pd.DataFrame({
     "leak_position": leak_position
 })
 
-df.to_csv("iot_data.csv", index=False)
+# create data folder if it doesn't exist
+os.makedirs("../data", exist_ok=True)
 
-print("Dataset created")
+df.to_csv("../data/iot_data.csv", index=False)
+
+print("Dataset created at ../data/iot_data.csv")
