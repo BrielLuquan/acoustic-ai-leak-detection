@@ -22,7 +22,7 @@ import {
 } from "@/lib/supabaseClient";
 
 const HISTORY_LIMIT = 4;
-const HARDWARE_TIMEOUT_MS = 60_000; // if no real-sensor packet in 60s, hardware considered offline
+const HARDWARE_TIMEOUT_MS = 60_000; 
 
 export default function Index() {
   const [readings, setReadings] = useState<SensorReading[]>([]);
@@ -38,7 +38,24 @@ export default function Index() {
   const manualIdsRef = useRef<Set<number>>(new Set());
   const hardwareTimerRef = useRef<number | null>(null);
 
-  const latest = readings[0];
+  // 🔌 ADDED: Local state to save the active real hardware values
+  const [localHardwareData, setLocalHardwareData] = useState({ A: 0, B: 0, C: 0 });
+
+  // 🔌 MODIFIED: If hardware is live, display local hardware values. Else use Supabase latest stream row.
+  const latest = useMemo(() => {
+    if (hardwareLive) {
+      return {
+        id: -1,
+        created_at: new Date().toISOString(),
+        sensorA: localHardwareData.A,
+        sensorB: localHardwareData.B,
+        sensorC: localHardwareData.C,
+        prediction: lastResult?.prediction ?? "normal"
+      } as SensorReading;
+    }
+    return readings[0];
+  }, [hardwareLive, readings, localHardwareData, lastResult]);
+
   const prediction: Prediction | null = latest?.prediction ?? null;
 
   const fetchHistory = useCallback(async () => {
@@ -58,7 +75,6 @@ export default function Index() {
     setSetupError(null);
     setReadings((data ?? []) as SensorReading[]);
 
-    // Load most recent open leak (best effort; ignore if table missing)
     const { data: ev } = await supabase
       .from("leak_events")
       .select("*")
@@ -68,61 +84,6 @@ export default function Index() {
     if (ev && ev.length > 0) setActiveEvent(ev[0] as LeakEvent);
     else setActiveEvent(null);
   }, []);
-
-  useEffect(() => {
-    fetchHistory();
-
-    const channel = supabase
-      .channel("acoustic:realtime")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "sensor_data" },
-        (payload) => {
-          const row = payload.new as SensorReading;
-          setReadings((prev) => {
-            if (prev.find((r) => r.id === row.id)) return prev;
-            return [row, ...prev].slice(0, HISTORY_LIMIT);
-          });
-
-          // Auto-detect real hardware: any insert NOT originated from this client
-          // is treated as a packet from a physical sensor / external ingest.
-          if (!manualIdsRef.current.has(row.id)) {
-            setHardwareLive(true);
-            if (hardwareTimerRef.current) window.clearTimeout(hardwareTimerRef.current);
-            hardwareTimerRef.current = window.setTimeout(() => {
-              setHardwareLive(false);
-            }, HARDWARE_TIMEOUT_MS);
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "leak_events" },
-        (payload) => {
-          const row = (payload.new ?? payload.old) as LeakEvent;
-          if (!row) return;
-          if (payload.eventType === "INSERT" && row.status === "open") {
-            setActiveEvent(row);
-          } else if (
-            payload.eventType === "UPDATE" &&
-            (row as LeakEvent).status === "resolved"
-          ) {
-            setActiveEvent((cur) => (cur && cur.id === row.id ? null : cur));
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-      if (hardwareTimerRef.current) window.clearTimeout(hardwareTimerRef.current);
-    };
-  }, [fetchHistory]);
-
-  // Auto-hide simulation panel when real hardware is detected
-  useEffect(() => {
-    if (autoHide && hardwareLive) setShowSimulation(false);
-  }, [autoHide, hardwareLive]);
 
   const handleSubmit = useCallback(
     async (a: number, b: number, c: number) => {
@@ -161,7 +122,6 @@ export default function Index() {
           });
         }
 
-        // Open a leak event when a leak is detected and no active one exists
         if (result.prediction !== "normal") {
           if (!activeEvent) {
             const { data: ev, error: evErr } = await supabase
@@ -191,6 +151,90 @@ export default function Index() {
     },
     [activeEvent, geometry]
   );
+
+  // 🔌 ADDED: The Polling effect connecting directly to your Express bridge server
+  useEffect(() => {
+    async function fetchLocalSensorData() {
+      try {
+        const res = await fetch("http://localhost:3001/sensor");
+        const data = await res.json();
+        
+        // If data contains actual live readings from Arduino (> 0 means active sound stream)
+        if (data.A > 0 || data.B > 0 || data.C > 0) {
+          setLocalHardwareData(data);
+          setHardwareLive(true);
+
+          // Pipe the data automatically through the ML prediction logic
+          const result = await predictLeak({ sensorA: data.A, sensorB: data.B, sensorC: data.C }, geometry);
+          setLastResult(result);
+
+          // Reset the hardware pulse indicator clock
+          if (hardwareTimerRef.current) window.clearTimeout(hardwareTimerRef.current);
+          hardwareTimerRef.current = window.setTimeout(() => {
+            setHardwareLive(false);
+          }, HARDWARE_TIMEOUT_MS);
+        }
+      } catch (err) {
+        // Express engine server is resting or closed, fall back silently
+      }
+    }
+
+    // Requests numbers from your node bridge server every 300ms
+    const localInterval = setInterval(fetchLocalSensorData, 300);
+    return () => clearInterval(localInterval);
+  }, [geometry]);
+
+  useEffect(() => {
+    fetchHistory();
+
+    const channel = supabase
+      .channel("acoustic:realtime")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "sensor_data" },
+        (payload) => {
+          const row = payload.new as SensorReading;
+          setReadings((prev) => {
+            if (prev.find((r) => r.id === row.id)) return prev;
+            return [row, ...prev].slice(0, HISTORY_LIMIT);
+          });
+
+          if (!manualIdsRef.current.has(row.id)) {
+            setHardwareLive(true);
+            if (hardwareTimerRef.current) window.clearTimeout(hardwareTimerRef.current);
+            hardwareTimerRef.current = window.setTimeout(() => {
+              setHardwareLive(false);
+            }, HARDWARE_TIMEOUT_MS);
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "leak_events" },
+        (payload) => {
+          const row = (payload.new ?? payload.old) as LeakEvent;
+          if (!row) return;
+          if (payload.eventType === "INSERT" && row.status === "open") {
+            setActiveEvent(row);
+          } else if (
+            payload.eventType === "UPDATE" &&
+            (row as LeakEvent).status === "resolved"
+          ) {
+            setActiveEvent((cur) => (cur && cur.id === row.id ? null : cur));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+      if (hardwareTimerRef.current) window.clearTimeout(hardwareTimerRef.current);
+    };
+  }, [fetchHistory]);
+
+  useEffect(() => {
+    if (autoHide && hardwareLive) setShowSimulation(false);
+  }, [autoHide, hardwareLive]);
 
   const handleConfirmFix = useCallback(async () => {
     setResolving(true);
@@ -263,7 +307,7 @@ export default function Index() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-3">
-          <Section>
+          <Section { .../* 🔌 Value linked directly to our stream definition */} >
             <SensorCard
               label="Sensor A · Upstream"
               channel="A"
